@@ -1,0 +1,45 @@
+import pandas as pd
+import numpy as np
+import random
+import taipy as tp
+from gensim.models import Word2Vec
+from tensorflow.keras.models import load_model
+
+word2vec_model = Word2Vec.load("word2vec.model")
+lstm_model = load_model("lstm_text_classification.model")
+data = pd.read_csv("twitter_training.csv")
+
+
+def get_embedding(tweet):
+    words = tweet.split()
+    embeddings = [word2vec_model.wv[word] for word in words if word in word2vec_model.wv]
+    if embeddings:
+        return np.mean(embeddings, axis=0)
+    else:
+        return np.zeros(word2vec_model.vector_size)
+
+
+def predict_label(tweet):
+    embedding = get_embedding(tweet)
+    embedding = np.expand_dims(embedding, axis=0)
+    prediction = lstm_model.predict(embedding)
+    predicted_label = np.argmax(prediction, axis=1)  
+    label_map = {0: 'Negative', 1: 'Neutral', 2: 'Positive', 3: 'Other'}  # Example mapping
+    return label_map.get(predicted_label[0], "Unknown")
+
+
+def get_random_sample():
+    sample_data = data.sample(10).reset_index(drop=True)
+    sample_data['Predicted'] = sample_data['tweet'].apply(predict_label)
+    return sample_data[['tweet', 'Sense', 'Predicted']]
+
+@tp.Gui
+def app():
+    tp.h1("Random Tweet Sentiment Predictor")
+
+  
+    if tp.button("Show 10 Random Tweets"):
+        sample = get_random_sample()
+        tp.table(sample) 
+
+app()
